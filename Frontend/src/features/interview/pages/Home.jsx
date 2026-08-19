@@ -113,14 +113,14 @@ const Home = () => {
                                 <p className='dropzone__title'>
                                     {resumeFileName ? resumeFileName : "Click to upload or drag & drop"}
                                 </p>
-                                <p className='dropzone__subtitle'>PDF or DOCX (Max 5MB)</p>
+                                <p className='dropzone__subtitle'>PDF(Max 5MB)</p>
                                 <input
                                     ref={resumeInputRef}
                                     hidden
                                     type='file'
                                     id='resume'
                                     name='resume'
-                                    accept='.pdf,.docx'
+                                    accept='.pdf,'
                                     onChange={handleResumeChange}   // ADDED: wire up the change handler
                                 />
                             </label>

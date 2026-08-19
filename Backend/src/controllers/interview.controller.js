@@ -35,6 +35,17 @@ async function generateInterViewReportController(req, res) {
         selfDescription,
         jobDescription
     })
+    // ADDED: validate the AI actually returned proper arrays before trying to save
+    if (!Array.isArray(interViewReportByAi.technicalQuestions) || !Array.isArray(interViewReportByAi.behavioralQuestions)) {
+        return res.status(502).json({
+            message: "The AI response was incomplete. Please try again."
+        })
+    }
+
+    // ADDED: fallback in case the AI response is missing a title, so the save doesn't crash
+    if (!interViewReportByAi.title) {
+        interViewReportByAi.title = "Untitled Position"
+    }
 
     const interviewReport = await interviewReportModel.create({
         user: req.user.id,

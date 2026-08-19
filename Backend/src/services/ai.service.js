@@ -34,24 +34,46 @@ const interviewReportSchema = z.object({
 
 async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
 
+    // CHANGED: explicit structure spelled out in the prompt itself as a safety net,
+    // in case responseSchema alone isn't being honored by the model.
+    const prompt = `You are an interview preparation assistant. Analyze the candidate below and respond with ONLY a single valid JSON object (not an array, no markdown fences, no extra commentary) that EXACTLY matches this shape and these field names:
 
-    const prompt = `Generate an interview report for a candidate with the following details:
-                        Resume: ${resume}
-                        Self Description: ${selfDescription}
-                        Job Description: ${jobDescription}
+{
+  "title": string (the job title from the job description),
+  "matchScore": number (0 to 100),
+  "technicalQuestions": [ { "question": string, "intention": string, "answer": string }, ... at least 5 items ],
+  "behavioralQuestions": [ { "question": string, "intention": string, "answer": string }, ... at least 5 items ],
+  "skillGaps": [ { "skill": string, "severity": "low" | "medium" | "high" }, ... ],
+  "preparationPlan": [ { "day": number, "focus": string, "tasks": [string, ...] }, ... at least 5 days ]
+}
+
+Do not rename any field. Do not wrap the object in an array. Do not add any fields that are not listed above.
+
+Resume: ${resume}
+Self Description: ${selfDescription}
+Job Description: ${jobDescription}
 `
 
     const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.6-flash", // CHANGED: was "gemini-3-flash-preview" — preview models can silently ignore responseSchema; 2.5-flash is stable and well-documented for structured output
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(interviewReportSchema),
+            responseSchema: zodToJsonSchema(interviewReportSchema, { $refStrategy: "none" }),
+            maxOutputTokens: 8192, // ADDED: default token limit was too low to finish the full structured response (questions + prep plan), causing truncated/broken JSON
         }
     })
 
-    return JSON.parse(response.text)
+    console.log("AI raw response:", response.text) // ADDED: keep this for now so we can confirm the fix worked
 
+    let parsed = JSON.parse(response.text)
+
+    // ADDED: if the model still wraps the object in an array, unwrap it defensively
+    if (Array.isArray(parsed)) {
+        parsed = parsed[0]
+    }
+
+    return parsed
 
 }
 
@@ -96,11 +118,12 @@ async function generateResumePdf({ resume, selfDescription, jobDescription }) {
                     `
 
     const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.6-flash", // CHANGED: same model swap here for consistency
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(resumePdfSchema),
+            responseSchema: zodToJsonSchema(resumePdfSchema, { $refStrategy: "none" }),
+            maxOutputTokens: 8192, // ADDED: default token limit was too low to finish the full structured response (questions + prep plan), causing truncated/broken JSON
         }
     })
 
