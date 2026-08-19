@@ -48,7 +48,7 @@ app.use("/api/interview", interviewRouter)
 
 /* serve frontend build (single combined deployment) */
 app.use(express.static(path.join(__dirname, "../../Frontend/dist")))
-app.get("*", (req, res) => {
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, "../../Frontend/dist/index.html"))
 })
 
