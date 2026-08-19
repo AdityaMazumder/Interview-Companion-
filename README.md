@@ -2,7 +2,7 @@
 
 An AI-powered interview preparation platform that analyzes your resume (or a quick self-description) against a target job description, and generates a personalized interview strategy — technical questions, behavioral questions, a skill-gap breakdown, and a day-by-day preparation roadmap.
 
-**Live demo:** [https://ai-interviewer-k4pc.onrender.com](https://ai-interviewer-k4pc.onrender.com)
+**Live demo:** [https://ai-interviewer-k4pc.onrender.com](https://tinyurl.com/interview-companion)
 
 ---
 
