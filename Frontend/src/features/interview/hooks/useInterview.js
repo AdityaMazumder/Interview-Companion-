@@ -21,13 +21,13 @@ export const useInterview = () => {
         try {
             response = await generateInterviewReport({ jobDescription, selfDescription, resumeFile })
             setReport(response.interviewReport)
+            return response.interviewReport   // CHANGED: return moved inside try, only runs on success
         } catch (error) {
             console.log(error)
+            return null   // ADDED: return null explicitly on failure instead of crashing
         } finally {
             setLoading(false)
         }
-
-        return response.interviewReport
     }
 
     const getReportById = async (interviewId) => {
@@ -36,12 +36,13 @@ export const useInterview = () => {
         try {
             response = await getInterviewReportById(interviewId)
             setReport(response.interviewReport)
+            return response.interviewReport   // CHANGED
         } catch (error) {
             console.log(error)
+            return null   // ADDED
         } finally {
             setLoading(false)
         }
-        return response.interviewReport
     }
 
     const getReports = async () => {
@@ -50,13 +51,13 @@ export const useInterview = () => {
         try {
             response = await getAllInterviewReports()
             setReports(response.interviewReports)
+            return response.interviewReports   // CHANGED
         } catch (error) {
             console.log(error)
+            return []   // ADDED
         } finally {
             setLoading(false)
         }
-
-        return response.interviewReports
     }
 
     const getResumePdf = async (interviewReportId) => {
