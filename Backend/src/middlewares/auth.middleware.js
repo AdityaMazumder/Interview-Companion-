@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken")
-const tokenBlacklistModel = require("../models/blacklist.models")
+const tokenBlacklistModel = require("../models/blacklist.model")
 
 
 
@@ -13,7 +13,7 @@ async function authUser(req, res, next) {
         })
     }
 
-     const isTokenBlacklisted = await tokenBlacklistModel.findOne({
+    const isTokenBlacklisted = await tokenBlacklistModel.findOne({
         token
     })
 
@@ -22,8 +22,6 @@ async function authUser(req, res, next) {
             message: "token is invalid"
         })
     }
-
-
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
@@ -39,7 +37,7 @@ async function authUser(req, res, next) {
         })
     }
 
-
 }
 
-module.exports = { authUser}
+
+module.exports = { authUser }
