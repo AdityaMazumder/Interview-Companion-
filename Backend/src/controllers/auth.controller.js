@@ -1,7 +1,7 @@
-const userModel = require("../models/blacklist.models")
+const userModel = require("../models/user.model")        
 const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
-const tokenBlacklistModel = require("../models/blacklist.model")
+const tokenBlacklistModel = require("../models/blacklist.models")  
 
 /**
  * @name registerUserController

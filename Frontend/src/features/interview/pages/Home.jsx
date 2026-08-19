@@ -3,9 +3,12 @@ import "../style/home.scss"
 import { useInterview } from '../hooks/useInterview.js'
 import { useNavigate } from 'react-router'
 
+import { useAuth } from '../../auth/hooks/useAuth.js' // ADDED: import useAuth to access handleLogout
+
 const Home = () => {
 
     const { loading, generateReport,reports } = useInterview()
+    const { handleLogout } = useAuth()   // ADDED: pull handleLogout from the auth hook
     const [ jobDescription, setJobDescription ] = useState("")
     const [ selfDescription, setSelfDescription ] = useState("")
     const resumeInputRef = useRef()
@@ -31,8 +34,21 @@ const Home = () => {
 
             {/* Page Header */}
             <header className='page-header'>
+                {/* ADDED: logout button, calls handleLogout from useAuth on click */}
+                <button
+                    onClick={handleLogout}
+                    className='logout-btn'
+                    style={{
+                        float: 'right',
+                        padding: '8px 16px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Logout
+                </button>
                 <h1>Create Your Custom <span className='highlight'>Interview Plan</span></h1>
                 <p>Let our AI analyze the job requirements and your unique profile to build a winning strategy.</p>
+                
             </header>
 
             {/* Main Card */}
