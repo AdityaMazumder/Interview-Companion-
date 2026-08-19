@@ -3,14 +3,10 @@ const { generateInterviewReport, generateResumePdf } = require("../services/ai.s
 const interviewReportModel = require("../models/interviewReport.model")
 
 
-/**
- * @description Controller to generate interview report based on user self description, resume and job description.
- */
 async function generateInterViewReportController(req, res) {
 
     const { selfDescription, jobDescription } = req.body
 
-    // ADDED: validate required inputs before doing anything else
     if (!jobDescription) {
         return res.status(400).json({
             message: "Job description is required."
@@ -23,7 +19,6 @@ async function generateInterViewReportController(req, res) {
         })
     }
 
-    // CHANGED: only parse the PDF if a resume file was actually uploaded
     let resumeText = ""
     if (req.file) {
         const resumeContent = await (new pdfParse.PDFParse(Uint8Array.from(req.file.buffer))).getText()
@@ -35,14 +30,14 @@ async function generateInterViewReportController(req, res) {
         selfDescription,
         jobDescription
     })
-    // ADDED: validate the AI actually returned proper arrays before trying to save
+
+    // ADDED: guard against a malformed/truncated AI response before saving
     if (!Array.isArray(interViewReportByAi.technicalQuestions) || !Array.isArray(interViewReportByAi.behavioralQuestions)) {
         return res.status(502).json({
             message: "The AI response was incomplete. Please try again."
         })
     }
 
-    // ADDED: fallback in case the AI response is missing a title, so the save doesn't crash
     if (!interViewReportByAi.title) {
         interViewReportByAi.title = "Untitled Position"
     }
@@ -62,9 +57,6 @@ async function generateInterViewReportController(req, res) {
 
 }
 
-/**
- * @description Controller to get interview report by interviewId.
- */
 async function getInterviewReportByIdController(req, res) {
 
     const { interviewId } = req.params
@@ -84,9 +76,6 @@ async function getInterviewReportByIdController(req, res) {
 }
 
 
-/** 
- * @description Controller to get all interview reports of logged in user.
- */
 async function getAllInterviewReportsController(req, res) {
     const interviewReports = await interviewReportModel.find({ user: req.user.id }).sort({ createdAt: -1 }).select("-resume -selfDescription -jobDescription -__v -technicalQuestions -behavioralQuestions -skillGaps -preparationPlan")
 
@@ -97,9 +86,6 @@ async function getAllInterviewReportsController(req, res) {
 }
 
 
-/**
- * @description Controller to generate resume PDF based on user self description, resume and job description.
- */
 async function generateResumePdfController(req, res) {
     const { interviewReportId } = req.params
 

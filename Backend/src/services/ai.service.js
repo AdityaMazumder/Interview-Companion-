@@ -1,6 +1,5 @@
 const { GoogleGenAI } = require("@google/genai")
 const { z } = require("zod")
-const { zodToJsonSchema } = require("zod-to-json-schema")
 const puppeteer = require("puppeteer")
 
 const ai = new GoogleGenAI({
@@ -8,46 +7,22 @@ const ai = new GoogleGenAI({
 })
 
 
-const interviewReportSchema = z.object({
-    matchScore: z.number().describe("A score between 0 and 100 indicating how well the candidate's profile matches the job describe"),
-    technicalQuestions: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in the interview"),
-        intention: z.string().describe("The intention of interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Technical questions that can be asked in the interview along with their intention and how to answer them"),
-    behavioralQuestions: z.array(z.object({
-        question: z.string().describe("The technical question can be asked in the interview"),
-        intention: z.string().describe("The intention of interviewer behind asking this question"),
-        answer: z.string().describe("How to answer this question, what points to cover, what approach to take etc.")
-    })).describe("Behavioral questions that can be asked in the interview along with their intention and how to answer them"),
-    skillGaps: z.array(z.object({
-        skill: z.string().describe("The skill which the candidate is lacking"),
-        severity: z.enum([ "low", "medium", "high" ]).describe("The severity of this skill gap, i.e. how important is this skill for the job and how much it can impact the candidate's chances")
-    })).describe("List of skill gaps in the candidate's profile along with their severity"),
-    preparationPlan: z.array(z.object({
-        day: z.number().describe("The day number in the preparation plan, starting from 1"),
-        focus: z.string().describe("The main focus of this day in the preparation plan, e.g. data structures, system design, mock interviews etc."),
-        tasks: z.array(z.string()).describe("List of tasks to be done on this day to follow the preparation plan, e.g. read a specific book or article, solve a set of problems, watch a video etc.")
-    })).describe("A day-wise preparation plan for the candidate to follow in order to prepare for the interview effectively"),
-    title: z.string().describe("The title of the job for which the interview report is generated"),
-})
-
 async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
 
-    // CHANGED: explicit structure spelled out in the prompt itself as a safety net,
-    // in case responseSchema alone isn't being honored by the model.
-    const prompt = `You are an interview preparation assistant. Analyze the candidate below and respond with ONLY a single valid JSON object (not an array, no markdown fences, no extra commentary) that EXACTLY matches this shape and these field names:
+    // CHANGED: dropped responseSchema entirely — it was corrupting output on this nested structure.
+    // Relying purely on strict prompt instructions instead, which is more reliable for complex shapes.
+    const prompt = `You are an interview preparation assistant. Analyze the candidate below and respond with ONLY a single valid JSON object — no markdown code fences, no array wrapper, no commentary before or after — that EXACTLY matches this shape and these field names:
 
 {
-  "title": string (the job title from the job description),
-  "matchScore": number (0 to 100),
-  "technicalQuestions": [ { "question": string, "intention": string, "answer": string }, ... at least 5 items ],
-  "behavioralQuestions": [ { "question": string, "intention": string, "answer": string }, ... at least 5 items ],
-  "skillGaps": [ { "skill": string, "severity": "low" | "medium" | "high" }, ... ],
-  "preparationPlan": [ { "day": number, "focus": string, "tasks": [string, ...] }, ... at least 5 days ]
+  "title": "string, the job title from the job description",
+  "matchScore": number between 0 and 100,
+  "technicalQuestions": [ { "question": "string", "intention": "string", "answer": "string" } ] (exactly 5 items),
+  "behavioralQuestions": [ { "question": "string", "intention": "string", "answer": "string" } ] (exactly 5 items),
+  "skillGaps": [ { "skill": "string", "severity": "low" or "medium" or "high" } ] (up to 5 items),
+  "preparationPlan": [ { "day": number, "focus": "string", "tasks": ["string"] } ] (exactly 5 days)
 }
 
-Do not rename any field. Do not wrap the object in an array. Do not add any fields that are not listed above.
+Keep every "answer" and each task under 2 sentences so the JSON stays compact. Do not rename any field. Do not add fields not listed above. Return raw JSON only, starting with { and ending with }.
 
 Resume: ${resume}
 Self Description: ${selfDescription}
@@ -55,20 +30,32 @@ Job Description: ${jobDescription}
 `
 
     const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash", // CHANGED: was "gemini-3-flash-preview" — preview models can silently ignore responseSchema; 2.5-flash is stable and well-documented for structured output
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
-            responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(interviewReportSchema, { $refStrategy: "none" }),
-            maxOutputTokens: 8192, // ADDED: default token limit was too low to finish the full structured response (questions + prep plan), causing truncated/broken JSON
+            responseMimeType: "application/json", // CHANGED: kept, but no responseSchema now
+            maxOutputTokens: 8192,
         }
     })
 
-    console.log("AI raw response:", response.text) // ADDED: keep this for now so we can confirm the fix worked
+    console.log("AI raw response:", response.text)
+    console.log("Finish reason:", response.candidates?.[0]?.finishReason)
 
-    let parsed = JSON.parse(response.text)
+    let rawText = response.text.trim()
 
-    // ADDED: if the model still wraps the object in an array, unwrap it defensively
+    // ADDED: strip markdown fences if the model adds them despite instructions
+    if (rawText.startsWith("```")) {
+        rawText = rawText.replace(/^```(json)?/, "").replace(/```$/, "").trim()
+    }
+
+    let parsed
+    try {
+        parsed = JSON.parse(rawText)
+    } catch (err) {
+        console.log("JSON parse failed on:", rawText) // ADDED: so we can see exactly what broke, if it ever does again
+        throw new Error("AI returned invalid JSON")
+    }
+
     if (Array.isArray(parsed)) {
         parsed = parsed[0]
     }
@@ -100,35 +87,37 @@ async function generatePdfFromHtml(htmlContent) {
 
 async function generateResumePdf({ resume, selfDescription, jobDescription }) {
 
-    const resumePdfSchema = z.object({
-        html: z.string().describe("The HTML content of the resume which can be converted to PDF using any library like puppeteer")
-    })
-
-    const prompt = `Generate resume for a candidate with the following details:
+    // CHANGED: dropped responseSchema here too, for consistency and reliability
+    const prompt = `Generate a resume for a candidate with the following details:
                         Resume: ${resume}
                         Self Description: ${selfDescription}
                         Job Description: ${jobDescription}
 
-                        the response should be a JSON object with a single field "html" which contains the HTML content of the resume which can be converted to PDF using any library like puppeteer.
+                        Respond with ONLY a single valid JSON object — no markdown fences, no commentary — in exactly this shape:
+                        { "html": "string containing the full HTML content of the resume" }
+
                         The resume should be tailored for the given job description and should highlight the candidate's strengths and relevant experience. The HTML content should be well-formatted and structured, making it easy to read and visually appealing.
-                        The content of resume should be not sound like it's generated by AI and should be as close as possible to a real human-written resume.
-                        you can highlight the content using some colors or different font styles but the overall design should be simple and professional.
+                        The content should not sound like it's generated by AI and should be as close as possible to a real human-written resume.
+                        You can highlight the content using some colors or different font styles but the overall design should be simple and professional.
                         The content should be ATS friendly, i.e. it should be easily parsable by ATS systems without losing important information.
-                        The resume should not be so lengthy, it should ideally be 1-2 pages long when converted to PDF. Focus on quality rather than quantity and make sure to include all the relevant information that can increase the candidate's chances of getting an interview call for the given job description.
+                        The resume should not be so lengthy, it should ideally be 1-2 pages long when converted to PDF. Focus on quality rather than quantity.
                     `
 
     const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash", // CHANGED: same model swap here for consistency
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
             responseMimeType: "application/json",
-            responseSchema: zodToJsonSchema(resumePdfSchema, { $refStrategy: "none" }),
-            maxOutputTokens: 8192, // ADDED: default token limit was too low to finish the full structured response (questions + prep plan), causing truncated/broken JSON
+            maxOutputTokens: 8192,
         }
     })
 
+    let rawText = response.text.trim()
+    if (rawText.startsWith("```")) {
+        rawText = rawText.replace(/^```(json)?/, "").replace(/```$/, "").trim()
+    }
 
-    const jsonContent = JSON.parse(response.text)
+    const jsonContent = JSON.parse(rawText)
 
     const pdfBuffer = await generatePdfFromHtml(jsonContent.html)
 
